@@ -1,3 +1,4 @@
+REGISTRY ?= ayaan49
 VERSION ?= latest
 PLATFORM ?= linux/amd64,linux/arm64
 BUILD ?= $(shell date +%Y%m%d%H%M%S)
