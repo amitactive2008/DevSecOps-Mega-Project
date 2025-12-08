@@ -3,7 +3,7 @@ kind: Pod
 spec:
 
   volumes:
-    - name: workspace:volume
+    - name: workspace-volume
       empthDir: {}
 
   containers: 
