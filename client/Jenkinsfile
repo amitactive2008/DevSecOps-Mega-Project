@@ -36,7 +36,7 @@ pipeline {
       steps {
         echo "Scanning repo for secrets..."
         container('gitleaks') {
-          sh 'gitleaks detect --source ./client --report-format=json --report-path=home/jenkins/agent/gitleaks-report.json'
+          sh 'gitleaks detect --source ./client --report-format=json --report-path=/home/jenkins/agent/gitleaks-report.json'
           echo "=== Gitleaks Report ==="
           sh 'cat /home/jenkins/agent/gitleaks-report.json'
         }
