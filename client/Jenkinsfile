@@ -1,0 +1,34 @@
+pipeline {
+  agent {
+    kubernetes {
+      yamlFile 'jenkins/Jenkins-agent.yaml'
+      defaultContainer 'jnlp'
+    }
+  }
+
+  environment {
+    REGISTRY = "ayaan49/devsecops"
+    APP = "client"
+    registryCredential = 'dockerhub'
+  }
+
+  stages {
+
+    stage('Stage 1: Checkout') {
+      steps {
+        echo "Checking out code..."
+        git branch: 'dev', url: 'https://github.com/Ayaan49/DevSecOps-Mega-Project.git'
+      }
+    }
+
+    stage('Stage 2: Compilation') {
+      steps {
+        echo "Checking JavaScript syntax..."
+        container('nodejs') {
+          dir('client') {
+            sh 'find . -name "*.js" -exec node --check {} +'
+          }
+        }
+      }
+    }
+}
