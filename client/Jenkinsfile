@@ -36,7 +36,9 @@ pipeline {
       steps {
         echo "Scanning repo for secrets..."
         container('gitleaks') {
-          sh 'gitleaks detect --source ./client --exit-code 1'
+          sh 'gitleaks detect --source ./client --report-format=json --report-path=gitleaks-report.json'
+          echo "=== Gitleaks Report ==="
+          sh 'cat gitleaks-report.json'
         }
       }
     }
