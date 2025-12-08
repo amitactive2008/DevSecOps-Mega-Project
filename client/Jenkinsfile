@@ -32,5 +32,99 @@ pipeline {
       }
     }
 
- }
-}
+    stage('Stage 3: Gitleaks Scan') {
+      steps {
+        echo "Scanning repo for secrets..."
+        container('gitleaks') {
+          sh 'gitleaks detect --source ./client --exit-code 1'
+        }
+      }
+    }
+
+    stage('Stage 4: Code Coverage') {
+      steps {
+        echo "Running tests..."
+        container('nodejs') {
+          dir('client') {
+            sh 'npm ci'
+            sh 'npm test -- --coverage --watchAll=false'
+          }
+        }
+      }
+    }
+
+    stage('Stage 5: SCA') {
+      steps {
+        echo "Running Dependency Check..."
+        container('dependency-check') {
+          dir('client') {
+            withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
+              sh """
+                dependency-check.sh \
+                  --scan . \
+                  --project frontend-react \
+                  --nvdApiKey $NVD_KEY \
+                  --out reports \
+                  --format HTML \
+                  --format JSON \
+                  --failOnCVSS 7
+              """
+            }
+          }
+        }
+      }
+    }
+
+    stage('Stage 6: SAST') {
+      steps {
+        echo "Running SonarQube..."
+        container('sonar') {
+          sh """
+            sonar-scanner \
+              -Dsonar.projectKey=frontend-react \
+              -Dsonar.sources=client/src \
+              -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info \
+              -Dsonar.dependencyCheck.jsonReportPath=client/reports/dependency-check-report.json \
+              -Dsonar.dependencyCheck.htmlReportPath=client/reports/dependency-check-report.html
+          """
+        }
+      }
+    }
+
+    stage('Stage 7: Quality Gate') {
+      steps {
+        script {
+          timeout(time: 1, unit: 'MINUTES') {
+            def qg = waitForQualityGate()
+            if (qg.status != 'OK') {
+              error "Pipeline failed because of Quality Gate: ${qg.status}"
+            }
+          }
+        }
+      }
+    }
+
+    stage('Stage 8: Docker Image') {
+      steps {
+        echo "Building Docker Image..."
+        container('docker-cli') {
+          withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USER', passwordVariable: 'PASS')]) {
+            sh 'echo "$PASS" | docker login -u "$USER" --password-stdin'
+            sh 'make client VERSION=${BUILD_NUMBER}'
+          }
+        }
+      }
+    }
+
+    stage('Stage 9: Trivy Image Scan') {
+      steps {
+        echo "Scanning Docker Image for vulnerabilities..."
+        container('trivy') {
+          sh 'trivy image --format table -o client-image-report.html ${REGISTRY}/${APP}:${BUILD_NUMBER}'
+          sh 'trivy image ${REGISTRY}/${APP}:${BUILD_NUMBER} > trivyresults.txt'
+        }
+      }
+    }
+
+  } // closes stages
+} // closes pipeline
