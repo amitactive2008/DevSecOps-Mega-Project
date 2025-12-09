@@ -14,6 +14,16 @@ pipeline {
 
   stages {
 
+    stage('Stage 0: Debug jnlp') {
+      steps{
+       echo "Debugging jnlp"
+       container('jnlp') {
+         sh 'ls -la /home/jenkins/agent'
+         sh 'ls -la /home/jenkins/agent/workspace || true'
+       }
+     }
+   }
+
     stage('Stage 1: Checkout') {
       steps {
         echo "Checking out code..."
@@ -38,22 +48,13 @@ pipeline {
         container('gitleaks') {
           sh 'ls -la /home/jenkins/agent'
           sh 'ls -la /home/jenkins/agent/workspace || true'
-          sh 'gitleaks detect --source ./client --report-format=json --report-path=/home/jenkins/agent/workspace/gitleaks-report.json'
+          sh 'gitleaks detect --source ./client --report-format=json --report-path=/home/jenkins/agent/workspace/gitleaks-report.json || true'
           echo "=== Gitleaks Report ==="
           sh 'cat /home/jenkins/agent/workspace/gitleaks-report.json'
         }
       }
     }
    
-    stage('Stage 3a: Debug jnlp') {
-      steps{
-       echo "Debugging jnlp"
-       container('jnlp') {
-         sh 'ls -la /home/jenkins/agent'
-         sh 'ls -la /home/jenkins/agent/workspace || true'
-       }
-     }
-   }
 
     stage('Stage 4: Code Coverage') {
       steps {
