@@ -63,7 +63,7 @@ pipeline {
           dir('client') {
             withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
               sh '''
-                /usr/share/dependecy-check/bin/dependency-check.sh \
+                /usr/share/dependency-check/bin/dependency-check.sh \
                   --scan . \
                   --project frontend-react \
                   --nvdApiKey $NVD_KEY \
