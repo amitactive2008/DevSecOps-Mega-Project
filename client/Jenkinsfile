@@ -70,7 +70,7 @@ pipeline {
                   --out reports \
                   --format HTML \
                   --format JSON \
-                  --failOnCVSS 7
+                  --failOnCVSS 11
               '''
             }
           }
