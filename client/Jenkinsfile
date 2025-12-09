@@ -36,12 +36,24 @@ pipeline {
       steps {
         echo "Scanning repo for secrets..."
         container('gitleaks') {
-          sh 'gitleaks detect --source ./client --report-format=json --report-path=/home/jenkins/agent/gitleaks-report.json'
+          sh 'ls -la /home/jenkins/agent'
+          sh 'ls -la /home/jenkins/agent/workspace || true'
+          sh 'gitleaks detect --source ./client --report-format=json --report-path=/home/jenkins/agent/workspace/gitleaks-report.json'
           echo "=== Gitleaks Report ==="
-          sh 'cat /home/jenkins/agent/gitleaks-report.json'
+          sh 'cat /home/jenkins/agent/workspace/gitleaks-report.json'
         }
       }
     }
+   
+    stage('Stage 3a: Debug jnlp') {
+      steps{
+       echo "Debugging jnlp"
+       container('jnlp') {
+         sh 'ls -la /home/jenkins/agent'
+         sh 'ls -la /home/jenkins/agent/workspace || true'
+       }
+     }
+   }
 
     stage('Stage 4: Code Coverage') {
       steps {
