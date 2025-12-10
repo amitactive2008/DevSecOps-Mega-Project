@@ -82,17 +82,19 @@ pipeline {
       steps {
         echo "Running SonarQube..."
         container('sonar') {
-          sh """
+        withSonarQubeEnv('mysonarqube') {
+          sh '''
             sonar-scanner \
               -Dsonar.projectKey=frontend-react \
               -Dsonar.sources=client/src \
               -Dsonar.javascript.lcov.reportPaths=client/coverage/lcov.info \
               -Dsonar.dependencyCheck.jsonReportPath=client/reports/dependency-check-report.json \
               -Dsonar.dependencyCheck.htmlReportPath=client/reports/dependency-check-report.html
-          """
+          '''
         }
       }
     }
+  }
 
     stage('Stage 7: Quality Gate') {
       steps {
