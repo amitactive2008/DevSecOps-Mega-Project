@@ -6,6 +6,10 @@ spec:
     - name: workspace-volume
       emptyDir: {}
 
+    - name: buildkit-certs
+      secret:
+        secretName: buildkit-client-certs
+
   containers: 
     - name: jnlp
       image: jenkins/inbound-agent
@@ -55,6 +59,10 @@ spec:
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
+
+        - name: buildkit-certs
+          mountPath: /certs
+          readOnly: true
 
     - name: trivy
       image: aquasec/trivy:latest
