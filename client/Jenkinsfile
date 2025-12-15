@@ -7,7 +7,7 @@ pipeline {
   }
 
   environment {
-    REGISTRY = "ayaan49/devsecops"
+    REGISTRY = "ayaan49"
     APP = "client"
     registryCredential = 'dockerhub'
   }
