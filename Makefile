@@ -11,7 +11,7 @@ builder:
 		--name imagebuilder \
 		--driver=remote \
 		$(BUILDKIT_HOST) \
-		--driver-opt=cacert=/certs/ca.pem,cert=/certs/cert.pem,key=/certs/key.pem \
+		--driver-opt=cacert=/certs/ca.pem,cert=/certs/cert.pem,key=/certs/key.pem,hostname=buildkitd \
 		--bootstrap --use || true
 
 client: builder
