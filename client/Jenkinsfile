@@ -57,7 +57,6 @@ pipeline {
     }
 
     stage('Stage 5: SCA') {
-      when { expression { false } }
       steps {
         echo "Running Dependency Check..."
         container('dependency-check') {
@@ -80,7 +79,6 @@ pipeline {
     }
 
     stage('Stage 6: SAST') {
-      when { expression { false } }
       steps {
         echo "Running SonarQube..."
         container('sonar') {
@@ -99,7 +97,6 @@ pipeline {
   }
 
     stage('Stage 7: Quality Gate') {
-      when { expression { false } }
       steps {
         script {
           timeout(time: 1, unit: 'MINUTES') {
