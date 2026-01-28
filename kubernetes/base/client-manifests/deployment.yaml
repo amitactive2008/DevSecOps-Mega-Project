@@ -2,10 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: client-deployment
+  namespace: dev
   labels:
     app: client
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: client
@@ -16,7 +17,7 @@ spec:
     spec:
       containers:
       - name: client
-        image: ayaan49/client:29
+        image: ayaan49/client:latest1
         ports:
         - containerPort: 80
 
