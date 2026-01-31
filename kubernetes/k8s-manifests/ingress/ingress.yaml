@@ -2,10 +2,18 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: app-ingress
+  namespace: dev
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
 spec:
   ingressClassName: traefik
+  tls:
+    - hosts:
+        - holymolyops.deployops.fun
+      secretName: tls-secret
   rules:
-    - http:
+    - host: holymolyops.deployops.fun
+      http:
         paths:
           - path: /api
             pathType: Prefix

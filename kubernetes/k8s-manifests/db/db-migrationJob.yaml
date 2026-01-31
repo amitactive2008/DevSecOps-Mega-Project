@@ -2,6 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: database-migration
+  namespace: dev
 spec:
   ttlSecondsAfterFinished: 100
   backoffLimit: 3
@@ -13,7 +14,7 @@ spec:
 
       containers:
       - name: migration
-        image: ayaan49/api
+        image: ayaan49/api:latest
         imagePullPolicy: Always
 
         command: ["node", "scripts/migrate.js"]
@@ -24,4 +25,10 @@ spec:
         - configMapRef:
             name: db-config
 
-  
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
