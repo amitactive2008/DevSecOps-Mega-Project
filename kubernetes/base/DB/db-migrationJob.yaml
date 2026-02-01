@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-migration
+spec:
+  ttlSecondsAfterFinished: 100
+  backoffLimit: 3
+  activeDeadlineSeconds: 300
+
+  template:
+    spec:
+      restartPolicy: Never
+
+      containers:
+      - name: migration
+        image: ayaan49/api
+        imagePullPolicy: Always
+
+        command: ["node", "scripts/migrate.js"]
+
+        envFrom:
+        - secretRef:
+            name: db-secrets
+        - configMapRef:
+            name: db-config
+
+  

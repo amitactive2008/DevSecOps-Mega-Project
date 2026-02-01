@@ -1,0 +1,41 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - namespace.yaml
+
+namespace: dev
+
+images: 
+  - name: ayaan49/api
+    newTag: latest
+
+  - name: ayaan49/client
+    newTag: latest1
+
+patches:
+  - path: api-deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: api-deployment
+
+  - path: client-deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: client-deployment
+
+  - path: db-configmap-patch.yaml
+    target:
+      kind: ConfigMap
+      name: db-config
+
+  - path: db-migrationJob-patch.yaml
+    target:
+      kind: Job
+      name: database-migration
+
+  - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: app-ingress

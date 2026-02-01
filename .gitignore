@@ -1,0 +1,24 @@
+# Node
+node_modules/
+
+# Env files
+.env
+.env.*
+
+# Certs / keys
+*.pem
+*.key
+*.crt
+*.p12
+
+# Jenkins / BuildKit secrets
+jenkins/buildkitd/certs/
+
+# Kubernetes real secrets
+**/*secret*.yaml
+**/*secret*.yml
+**/*secrets*.yaml
+**/*secrets*.yml
+
+
+
