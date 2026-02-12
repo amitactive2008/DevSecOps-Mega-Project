@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: database-migration
-  namespace: dev
+  namespace: prod
 spec:
   template:
     spec:
@@ -11,8 +11,8 @@ spec:
         image: ayaan49/api:latest
         resources:
           requests: 
-            memory: "256Mi"
-            cpu: "100m"
+            memory: "258Mi"
+            cpu: "101m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "513Mi"
+            cpu: "501m"

@@ -3,19 +3,24 @@ kind: Deployment
 metadata:
   name: client-deployment
   labels:
-    app: client
+    app.kubernetes.io/name: client
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/owner: ayaan
 spec:
   selector:
     matchLabels:
-      app: client
+      app.kubernetes.io/name: client
   template:
     metadata:
       labels:
-        app: client
+        app.kubernetes.io/name: client
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/owner: ayaan
     spec:
       containers:
       - name: client
-        image: ayaan49/client
+        image: ayaan49/client:latest2
+        imagePullPolicy: Always
         ports:
         - containerPort: 80
 

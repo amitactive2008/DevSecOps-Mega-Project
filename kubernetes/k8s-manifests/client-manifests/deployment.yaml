@@ -4,16 +4,23 @@ metadata:
   name: client-deployment
   namespace: dev
   labels:
-    app: client
+    app.kubernetes.io/name: client
+    app.kubernetes.io/instance: client-dev
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/owner: ayaan
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: client
+      app.kubernetes.io/name: client
+      app.kubernetes.io/instance: client-dev
   template:
     metadata:
       labels:
-        app: client
+        app.kubernetes.io/name: client
+        app.kubernetes.io/instance: client-dev
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/owner: ayaan
     spec:
       containers:
       - name: client

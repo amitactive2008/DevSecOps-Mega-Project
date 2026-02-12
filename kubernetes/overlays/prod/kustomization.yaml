@@ -5,14 +5,14 @@ resources:
   - ../../base
   - namespace.yaml
 
-namespace: dev
+namespace: prod
 
 images: 
   - name: ayaan49/api
     newTag: latest
 
   - name: ayaan49/client
-    newTag: latest1
+    newTag: latest2
 
 patches:
   - path: api-deployment-patch.yaml

@@ -20,5 +20,9 @@ jenkins/buildkitd/certs/
 **/*secrets*.yaml
 **/*secrets*.yml
 
+# AWS IAM policy files (ignore real ones)
+kubernetes/k8s-manifests/aws-secret-manager/*.json
 
+# But keep example policy files
+!kubernetes/k8s-manifests/aws-secret-manager/*.example.json
 
