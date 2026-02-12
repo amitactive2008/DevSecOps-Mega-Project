@@ -5,11 +5,4 @@ metadata:
   namespace: dev
 spec:
   selector:
-    app.kubernetes.io/name: api
     app.kubernetes.io/instance: api-dev
-  ports:
-  - port: 5000
-    targetPort: 5000
-  type: ClusterIP
-
-

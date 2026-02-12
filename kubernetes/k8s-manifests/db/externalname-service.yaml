@@ -7,4 +7,4 @@ metadata:
     service: database
 spec:
   type: ExternalName
-  externalName: devsecops-mysql.c0viok8km8ll.us-east-1.rds.amazonaws.com
+  externalName: devsecops-mysql.cgb48ywu8g7x.us-east-1.rds.amazonaws.com

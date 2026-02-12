@@ -1,4 +1,4 @@
-ingressClass:  
+ingressClass:
   enabled: true
   isDefaultClass: true
 
@@ -19,17 +19,16 @@ ports:
     expose:
       default: true
     exposedPort: 80
-    redirections:
-      entryPoint:
-        to: websecure
-        scheme: https
-        permanent: false
 
   websecure:
     port: 8443
     expose:
       default: true
     exposedPort: 443
-    tls:
-      enabled: true 
+
+additionalArguments:
+  - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+  - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+  - "--entrypoints.web.http.redirections.entrypoint.permanent=false"
+  - "--entrypoints.websecure.http.tls=true"
 

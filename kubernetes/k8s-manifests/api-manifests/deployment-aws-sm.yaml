@@ -2,18 +2,23 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api-deployment
+  namespace: dev
   labels:
     app.kubernetes.io/name: api
+    app.kubernetes.io/instance: api-dev
     app.kubernetes.io/component: backend
     app.kubernetes.io/owner: ayaan
 spec:
+  replicas: 1 
   selector:
     matchLabels:
       app.kubernetes.io/name: api
+      app.kubernetes.io/instance: api-dev
   template:
     metadata:
       labels:
         app.kubernetes.io/name: api
+        app.kubernetes.io/instance: api-dev
         app.kubernetes.io/component: backend
         app.kubernetes.io/owner: ayaan
     spec:
@@ -51,6 +56,13 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
           failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
         volumeMounts:
           - name: secrets-store
             mountPath: /mnt/secrets
@@ -70,4 +82,3 @@ spec:
             readOnly: true
             volumeAttributes:
               secretProviderClass: "app-secrets" 
-
