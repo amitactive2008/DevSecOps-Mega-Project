@@ -20,6 +20,9 @@ jenkins/buildkitd/certs/
 **/*secrets*.yaml
 **/*secrets*.yml
 
+!kubernetes/infra/aws-sm-eso/cloudflare-external-secret.yaml
+!kubernetes/infra/aws-sm-eso/cloudflare-secret-store.yaml
+
 # AWS IAM policy files (ignore real ones)
 kubernetes/k8s-manifests/aws-secret-manager/*.json
 
