@@ -2,6 +2,9 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: database-migration
+  annotations:
+    argocd.argoproj.io/hook: PreSync # Runs BEFORE the API starts
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   ttlSecondsAfterFinished: 100
   backoffLimit: 3

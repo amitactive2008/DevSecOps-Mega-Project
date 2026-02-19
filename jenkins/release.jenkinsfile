@@ -1,0 +1,66 @@
+pipeline {
+    agent {
+        kubernetes {
+            yamlFile 'jenkins/Jenkins-agent.yaml'
+            defaultContainer 'jnlp'
+        }
+    }
+
+    parameters {
+        string(name: 'COMPONENT', defaultValue: '', description: 'api or client')
+        string(name: 'TAG', defaultValue: '', description: 'Build number from CI')
+        choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Target environment')
+    }
+
+    options {
+        // PREVENTS CONCURRENCY ISSUES: API and Client won't clash on Git push
+        lock('github-manifest-update-lock')
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
+    stages {
+        stage('Manifest Update & GitOps Push') {
+            steps {
+                container('kustomize') {
+                    script {
+                        // 1. SECURE CHECKOUT: Pull the k8s-deploy branch
+                        git branch: 'k8s-deploy', 
+                            credentialsId: 'github-ssh-key', 
+                            url: 'git@github.com:Ayaan49/DevSecOps-Mega-Project.git'
+
+                        // 2. KUSTOMIZE EDIT: Change the image tag in the specific overlay
+                        dir("kubernetes/overlays/${params.ENV}") {
+                            def imageName = (params.COMPONENT == 'api') ? 'ayaan49/api' : 'ayaan49/client'
+                            echo "Updating ${imageName} to tag ${params.TAG} in ${params.ENV}..."
+                            
+                            sh "kustomize edit set image ${imageName}=${imageName}:${params.TAG}"
+                        }
+
+                        // 3. GIT CONFIG: Identify the Jenkins bot
+                        sh "git config user.name 'jenkins-bot'"
+                        sh "git config user.email 'jenkins-bot@company.com'"
+
+                        // 4. COMMIT: Save changes to the manifest branch
+                        sh "git add kubernetes/overlays/${params.ENV}/kustomization.yaml"
+                        sh "git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} image to v${params.TAG}' || echo 'No changes to commit'"
+
+                        // 5. SECURE PUSH: Use SSH Agent to push back to GitHub
+                        sshagent(['github-ssh-key']) {
+                            sh "git push origin k8s-deploy"
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "SUCCESS: Manifests updated. Argo CD will now detect the change in ${params.ENV}."
+        }
+        failure {
+            echo "FAILURE: Manifest update failed. Check logs for Git or Kustomize errors."
+        }
+    }
+}
+

@@ -79,6 +79,11 @@ spec:
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent/
-
-        
-    
+   
+    - name: kustomize
+      image: line/kubectl-kustomize:latest
+      command: ["cat"]
+      tty: true
+      volumeMounts:
+        - name: workspace-volume
+          mountPath: /home/jenkins/agent    

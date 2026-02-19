@@ -12,6 +12,11 @@ pipeline {
     registryCredential = 'dockerhub'
   }
 
+  parameters {
+  booleanParam(name: 'FAST_MODE', defaultValue: false, description: 'Skip security & quality stages')
+  }
+
+
   stages {
 
     stage('Stage 1: Checkout') {
@@ -33,6 +38,9 @@ pipeline {
     }
 
     stage('Stage 3: Gitleaks Scan') {
+      when {
+        expression { return !params.FAST_MODE }
+      }
       steps {
         echo "Scanning repo for secrets..."
         container('gitleaks') {
@@ -45,6 +53,9 @@ pipeline {
    
 
     stage('Stage 4: SCA') {
+      when {
+        expression { return !params.FAST_MODE }
+      }
       steps {
         echo "Running Dependency Check..."
         container('dependency-check') {
@@ -67,6 +78,9 @@ pipeline {
     }
 
     stage('Stage 5: SAST') {
+      when {
+        expression { return !params.FAST_MODE }
+      }
       steps {
         echo "Running SonarQube..."
         container('sonar') {
@@ -85,6 +99,9 @@ pipeline {
   }
 
     stage('Stage 6: Quality Gate') {
+      when {
+        expression { return !params.FAST_MODE }
+      }
       steps {
         script {
           timeout(time: 1, unit: 'MINUTES') {
@@ -116,6 +133,17 @@ pipeline {
         }
       }
     }
+
+    stage('Stage 9: Trigger CD') {
+            steps {
+            
+                build job: 'app-gitops-updater', parameters: [
+                    string(name: 'COMPONENT', value: 'api'),
+                    string(name: 'TAG', value: "${env.BUILD_NUMBER}"),
+                    string(name: 'ENV', value: 'dev')
+                ], wait: false
+            }
+        }
 
   } // closes stages
 } // closes pipeline
