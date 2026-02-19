@@ -12,6 +12,9 @@ pipeline {
         choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Target environment')
     }
 
+    options {
+        // Keeps the pipeline from hanging forever if GitHub is down
+        timeout(time: 15, unit: 'MINUTES')
     }
 
     stages {
@@ -19,12 +22,12 @@ pipeline {
             steps {
                 container('kustomize') {
                     script {
-                        // 1. SECURE CHECKOUT: Pull the k8s-deploy branch
+                        // 1. SECURE CHECKOUT: Use SSH URL for the SSH Key to work
                         git branch: 'k8s-deploy', 
                             credentialsId: 'github-ssh-key', 
                             url: 'git@github.com:Ayaan49/DevSecOps-Mega-Project.git'
 
-                        // 2. KUSTOMIZE EDIT: Change the image tag in the specific overlay
+                        // 2. KUSTOMIZE EDIT
                         dir("kubernetes/overlays/${params.ENV}") {
                             def imageName = (params.COMPONENT == 'api') ? 'ayaan49/api' : 'ayaan49/client'
                             echo "Updating ${imageName} to tag ${params.TAG} in ${params.ENV}..."
@@ -32,15 +35,15 @@ pipeline {
                             sh "kustomize edit set image ${imageName}=${imageName}:${params.TAG}"
                         }
 
-                        // 3. GIT CONFIG: Identify the Jenkins bot
+                        // 3. GIT CONFIG
                         sh "git config user.name 'jenkins-bot'"
                         sh "git config user.email 'jenkins-bot@company.com'"
 
-                        // 4. COMMIT: Save changes to the manifest branch
+                        // 4. COMMIT
                         sh "git add kubernetes/overlays/${params.ENV}/kustomization.yaml"
                         sh "git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} image to v${params.TAG}' || echo 'No changes to commit'"
 
-                        // 5. SECURE PUSH: Use SSH Agent to push back to GitHub
+                        // 5. SECURE PUSH
                         sshagent(['github-ssh-key']) {
                             sh "git push origin k8s-deploy"
                         }
@@ -52,10 +55,10 @@ pipeline {
 
     post {
         success {
-            echo "SUCCESS: Manifests updated. Argo CD will now detect the change in ${params.ENV}."
+            echo "SUCCESS: Manifests updated."
         }
         failure {
-            echo "FAILURE: Manifest update failed. Check logs for Git or Kustomize errors."
+            echo "FAILURE: Check Jenkins logs."
         }
     }
 }
