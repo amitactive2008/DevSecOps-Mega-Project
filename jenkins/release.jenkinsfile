@@ -12,10 +12,6 @@ pipeline {
         choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Target environment')
     }
 
-    options {
-        // PREVENTS CONCURRENCY ISSUES: API and Client won't clash on Git push
-        lock('github-manifest-update-lock')
-        timeout(time: 15, unit: 'MINUTES')
     }
 
     stages {
