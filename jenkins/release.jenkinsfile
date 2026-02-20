@@ -12,54 +12,47 @@ pipeline {
         choice(name: 'ENV', choices: ['dev', 'prod'], description: 'Target environment')
     }
 
-    options {
-        // Keeps the pipeline from hanging forever if GitHub is down
-        timeout(time: 15, unit: 'MINUTES')
-    }
-
     stages {
-        stage('Manifest Update & GitOps Push') {
-            steps {
-                container('gitops') {
-                    script {
-                        // 1. SECURE CHECKOUT: Use SSH URL for the SSH Key to work
-                        git branch: 'k8s-deploy', 
-                            credentialsId: 'github-ssh-key', 
-                            url: 'git@github.com:Ayaan49/DevSecOps-Mega-Project.git'
+stage('Manifest Update & GitOps Push') {
+    steps {
+        container('gitops') {
+            script {
 
-                        // 2. KUSTOMIZE EDIT
-                        dir("kubernetes/overlays/${params.ENV}") {
-                            def imageName = (params.COMPONENT == 'api') ? 'ayaan49/api' : 'ayaan49/client'
-                            echo "Updating ${imageName} to tag ${params.TAG} in ${params.ENV}..."
-                            
-                            sh "kustomize edit set image ${imageName}=${imageName}:${params.TAG}"
-                        }
+                // Checkout GitOps branch
+                git branch: 'k8s-deploy',
+                    credentialsId: 'github-ssh-key',
+                    url: 'git@github.com:Ayaan49/DevSecOps-Mega-Project.git'
 
-                        // 3. GIT CONFIG
-                        sh "git config user.name 'jenkins-bot'"
-                        sh "git config user.email 'jenkins-bot@company.com'"
+                // Update image tag
+                dir("kubernetes/overlays/${params.ENV}") {
+                    def imageName = (params.COMPONENT == 'api') ? 'ayaan49/api' : 'ayaan49/client'
+                    echo "Updating ${imageName} to tag ${params.TAG} in ${params.ENV}..."
+                    sh "kustomize edit set image ${imageName}=${imageName}:${params.TAG}"
+                }
 
-                        // 4. COMMIT
-                        sh "git add kubernetes/overlays/${params.ENV}/kustomization.yaml"
-                        sh "git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} image to v${params.TAG}' || echo 'No changes to commit'"
+                // Commit only changed file
+                sh """
+                    git config user.name 'jenkins-bot'
+                    git config user.email 'jenkins-bot@company.com'
+                    git add kubernetes/overlays/${params.ENV}/kustomization.yaml
+                    git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} to v${params.TAG}' || echo 'No changes'
+                """
 
-                        // 5. SECURE PUSH
-                        sshagent(['github-ssh-key']) {
-                            sh "git push origin k8s-deploy"
-                        }
-                    }
+                // Push
+                sshagent(['github-ssh-key']) {
+                    sh "git push origin k8s-deploy"
                 }
             }
         }
     }
+}
 
     post {
         success {
-            echo "SUCCESS: Manifests updated."
+            echo "SUCCESS: Manifests updated. Argo CD will now detect the change in ${params.ENV}."
         }
         failure {
-            echo "FAILURE: Check Jenkins logs."
+            echo "FAILURE: Manifest update failed. Check logs for Git or Kustomize errors."
         }
     }
 }
-
