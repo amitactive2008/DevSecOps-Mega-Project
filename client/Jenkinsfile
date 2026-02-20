@@ -114,10 +114,10 @@ pipeline {
   }
 
     stage('Stage 7: Quality Gate') {
-      steps {
       when {
         expression { return !params.FAST_MODE }
       }
+      steps {
         script {
           timeout(time: 1, unit: 'MINUTES') {
             def qg = waitForQualityGate()
