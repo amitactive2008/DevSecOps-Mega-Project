@@ -13,39 +13,36 @@ pipeline {
     }
 
     stages {
-stage('Manifest Update & GitOps Push') {
-    steps {
-        container('gitops') {
-            script {
+        stage('Manifest Update & GitOps Push') {
+            steps {
+                container('gitops') {
+                    script {
 
-                // Checkout GitOps branch
-                git branch: 'k8s-deploy',
-                    credentialsId: 'github-ssh-key',
-                    url: 'git@github.com:Ayaan49/DevSecOps-Mega-Project.git'
+                        git branch: 'k8s-deploy',
+                            credentialsId: 'github-ssh-key',
+                            url: 'git@github.com:Ayaan49/DevSecOps-Mega-Project.git'
 
-                // Update image tag
-                dir("kubernetes/overlays/${params.ENV}") {
-                    def imageName = (params.COMPONENT == 'api') ? 'ayaan49/api' : 'ayaan49/client'
-                    echo "Updating ${imageName} to tag ${params.TAG} in ${params.ENV}..."
-                    sh "kustomize edit set image ${imageName}=${imageName}:${params.TAG}"
-                }
+                        dir("kubernetes/overlays/${params.ENV}") {
+                            def imageName = (params.COMPONENT == 'api') ? 'ayaan49/api' : 'ayaan49/client'
+                            echo "Updating ${imageName} to tag ${params.TAG} in ${params.ENV}..."
+                            sh "kustomize edit set image ${imageName}=${imageName}:${params.TAG}"
+                        }
 
-                // Commit only changed file
-                sh """
-                    git config user.name 'jenkins-bot'
-                    git config user.email 'jenkins-bot@company.com'
-                    git add kubernetes/overlays/${params.ENV}/kustomization.yaml
-                    git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} to v${params.TAG}' || echo 'No changes'
-                """
+                        sh """
+                            git config user.name 'jenkins-bot'
+                            git config user.email 'jenkins-bot@company.com'
+                            git add kubernetes/overlays/${params.ENV}/kustomization.yaml
+                            git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} to v${params.TAG}' || echo 'No changes'
+                        """
 
-                // Push
-                sshagent(['github-ssh-key']) {
-                    sh "git push origin k8s-deploy"
+                        sshagent(['github-ssh-key']) {
+                            sh "git push origin k8s-deploy"
+                        }
+                    }
                 }
             }
         }
-    }
-}
+    }   
 
     post {
         success {
