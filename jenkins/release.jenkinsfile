@@ -41,7 +41,12 @@ pipeline {
 
              // 4. Push using the SSH Key
              sshagent(['github-ssh-key']) {
-                 sh "git push origin k8s-deploy"
+                 sh """
+                      mkdir -p ~/.ssh
+                      ssh-keyscan github.com >> ~/.ssh/known_hosts
+                      git push origin k8s-deploy
+
+                    """
                       
                        }
                     }
