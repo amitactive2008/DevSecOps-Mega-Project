@@ -15,7 +15,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: migration
-        image: ayaan49/api:latest
+        image: ayaan49/api
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
