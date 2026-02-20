@@ -39,10 +39,14 @@ pipeline {
                             git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} to v${params.TAG}' || echo 'No changes'
                         """
 
-                        // 4. Push using the SSH Key
-                        sshagent(['github-ssh-key']) {
-                            sh "git push origin k8s-deploy"
-                        }
+             // 4. Push using the SSH Key
+             withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+               sh """
+                   export GIT_SSH_COMMAND="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no"
+                   git push origin k8s-deploy
+
+                  """
+                       }
                     }
                 }
             }
