@@ -13,7 +13,8 @@ images:
   newName: ayaan49/api
   newTag: "4"
 - name: ayaan49/client
-  newTag: latest1
+  newName: ayaan49/client
+  newTag: "3"
 
 
 
