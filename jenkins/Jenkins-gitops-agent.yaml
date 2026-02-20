@@ -3,7 +3,7 @@ kind: Pod
 spec:
   containers:
     - name: gitops
-      image: ayaan49/gitops-tools:latest
+      image: ayaan49/gitops-tools:v1
       command:
         - cat
       tty: true

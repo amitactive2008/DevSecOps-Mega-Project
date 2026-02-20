@@ -40,12 +40,9 @@ pipeline {
                         """
 
              // 4. Push using the SSH Key
-             withCredentials([sshUserPrivateKey(credentialsId: 'github-ssh-key', keyFileVariable: 'SSH_KEY')]) {
-               sh """
-                   export GIT_SSH_COMMAND="ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no"
-                   git push origin k8s-deploy
-
-                  """
+             sshagent(['github-ssh-key']) {
+                 sh "git push origin k8s-deploy"
+                      
                        }
                     }
                 }
