@@ -1,0 +1,8 @@
+- name: gitops
+  image: ayaan49/gitops-tools:latest
+  command:
+    - cat
+  tty: true
+  volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume

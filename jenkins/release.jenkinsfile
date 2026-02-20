@@ -1,7 +1,7 @@
 pipeline {
     agent {
         kubernetes {
-            yamlFile 'jenkins/Jenkins-agent.yaml'
+            yamlFile 'jenkins/Jenkins-gitops-agent.yaml'
             defaultContainer 'jnlp'
         }
     }
@@ -20,7 +20,7 @@ pipeline {
     stages {
         stage('Manifest Update & GitOps Push') {
             steps {
-                container('kustomize') {
+                container('gitops') {
                     script {
                         // 1. SECURE CHECKOUT: Use SSH URL for the SSH Key to work
                         git branch: 'k8s-deploy', 
