@@ -13,28 +13,33 @@ pipeline {
     }
 
     stages {
-        stage('Manifest Update & GitOps Push') {
+         stage('Manifest Update & GitOps Push') {
             steps {
                 container('gitops') {
                     script {
-
-                        git branch: 'k8s-deploy',
-                            credentialsId: 'github-ssh-key',
+                        // 1. Checkout the branch
+                        git branch: 'k8s-deploy', 
+                            credentialsId: 'github-ssh-key', 
                             url: 'git@github.com:Ayaan49/DevSecOps-Mega-Project.git'
 
+                        // 2. Perform all Git and Kustomize operations
                         dir("kubernetes/overlays/${params.ENV}") {
                             def imageName = (params.COMPONENT == 'api') ? 'ayaan49/api' : 'ayaan49/client'
                             echo "Updating ${imageName} to tag ${params.TAG} in ${params.ENV}..."
                             sh "kustomize edit set image ${imageName}=${imageName}:${params.TAG}"
                         }
 
+                        // 3. Force Git to recognize the directory and commit
+                        // We use the WORKSPACE variable to tell Git exactly where we are
                         sh """
+                            git config --global --add safe.directory ${WORKSPACE}
                             git config user.name 'jenkins-bot'
                             git config user.email 'jenkins-bot@company.com'
-                            git add kubernetes/overlays/${params.ENV}/kustomization.yaml
+                            git add .
                             git commit -m 'chore(${params.ENV}): update ${params.COMPONENT} to v${params.TAG}' || echo 'No changes'
                         """
 
+                        // 4. Push using the SSH Key
                         sshagent(['github-ssh-key']) {
                             sh "git push origin k8s-deploy"
                         }
