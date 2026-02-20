@@ -1,8 +1,25 @@
-- name: gitops
-  image: ayaan49/gitops-tools:latest
-  command:
-    - cat
-  tty: true
-  volumeMounts:
-    - mountPath: /home/jenkins/agent
-      name: workspace-volume
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+    - name: gitops
+      image: ayaan49/gitops-tools:latest
+      command:
+        - cat
+      tty: true
+      volumeMounts:
+        - mountPath: /home/jenkins/agent
+          name: workspace-volume
+
+    - name: jnlp
+      image: jenkins/inbound-agent
+      args:
+        - "$(JENKINS_SECRET)"
+        - "$(JENKINS_NAME)"
+      volumeMounts:
+        - mountPath: /home/jenkins/agent
+          name: workspace-volume
+
+  volumes:
+    - name: workspace-volume
+      emptyDir: {}
