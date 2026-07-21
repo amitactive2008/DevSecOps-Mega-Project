@@ -1,0 +1,194 @@
+# Jenkins Helm chart values for local Kind cluster.
+# Chart: https://charts.jenkins.io
+# Docs:  https://github.com/jenkinsci/helm-charts/tree/main/charts/jenkins
+#
+# NOTE ON TLS:
+#   Let's Encrypt CANNOT issue certificates for .local TLD (no public DNS).
+#   The selfsigned-issuer ClusterIssuer (already deployed for app.local) is used
+#   instead. Your browser will show a "certificate not trusted" warning — accept it.
+
+controller:
+  image:
+    registry: "docker.io"
+    repository: "jenkins/jenkins"
+    tag: "2.504.1-lts"
+    pullPolicy: "IfNotPresent"
+
+  adminUser: "admin"
+  adminPassword: "admin"   # Change this after first login
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+
+  javaOpts: "-Djenkins.install.runSetupWizard=false -Dhudson.model.DirectoryBrowserSupport.CSP="
+
+  # Read credentials from the jenkins-credentials K8s Secret (created by deploy.sh)
+  # JCasC then references these via ${ENV_VAR} substitution.
+  extraEnvVars:
+    - name: DOCKERHUB_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: jenkins-credentials
+          key: DOCKERHUB_USERNAME
+    - name: DOCKERHUB_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: jenkins-credentials
+          key: DOCKERHUB_PASSWORD
+    - name: NVD_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: jenkins-credentials
+          key: NVD_API_KEY
+
+  installPlugins:
+    - kubernetes:latest
+    - workflow-aggregator:latest
+    - git:latest
+    - configuration-as-code:latest
+    - job-dsl:latest
+    - docker-workflow:latest
+    - credentials:latest
+    - plain-credentials:latest
+    - pipeline-stage-view:latest
+    - github:latest
+    - sonar:latest
+    - dependency-check-jenkins-plugin:latest
+    - ws-cleanup:latest
+    - build-discarder:latest
+    - pipeline-utility-steps:latest
+    - ansicolor:latest
+
+  # Nginx ingress with self-signed TLS (cert-manager selfsigned-issuer)
+  # Access at: https://jenkins.kind.local  (add to /etc/hosts: 127.0.0.1 jenkins.kind.local)
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hostName: jenkins.kind.local
+    annotations:
+      cert-manager.io/cluster-issuer: selfsigned-issuer
+    tls:
+      - secretName: jenkins-tls-local
+        hosts:
+          - jenkins.kind.local
+
+  # Jenkins Configuration as Code (JCasC)
+  # Applied automatically on startup — no manual UI configuration needed.
+  JCasC:
+    configScripts:
+
+      # ── Kubernetes cloud: dynamic agent pods ─────────────────────────────────
+      kubernetes-cloud: |
+        jenkins:
+          systemMessage: "Jenkins | DevSecOps-Mega-Project | Local Kind Cluster"
+          numExecutors: 0
+
+          clouds:
+            - kubernetes:
+                name: "kubernetes"
+                serverUrl: ""
+                skipTlsVerify: false
+                namespace: "jenkins"
+                jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8080"
+                jenkinsTunnel: "jenkins-agent.jenkins.svc.cluster.local:50000"
+                connectTimeout: 5
+                readTimeout: 15
+                containerCapStr: "10"
+                podRetention: "never"
+                # Pod templates are defined per-pipeline via yamlFile in each Jenkinsfile.
+                # See jenkins/Jenkins-agent.yaml for the agent spec.
+
+      # ── Credentials: DockerHub + NVD API key ─────────────────────────────────
+      credentials: |
+        credentials:
+          system:
+            domainCredentials:
+              - credentials:
+                  - usernamePassword:
+                      id: "dockerhub"
+                      description: "DockerHub — amitactive2008"
+                      username: "${DOCKERHUB_USERNAME}"
+                      password: "${DOCKERHUB_PASSWORD}"
+                      scope: GLOBAL
+                  - string:
+                      id: "NVD_API_KEY"
+                      description: "NVD API Key for OWASP Dependency-Check"
+                      secret: "${NVD_API_KEY}"
+                      scope: GLOBAL
+
+      # ── SonarQube server (optional — deploy SonarQube separately to enable) ───
+      sonarqube: |
+        unclassified:
+          sonarGlobalConfiguration:
+            buildWrapperEnabled: true
+            installations:
+              - name: "mysonarqube"
+                serverUrl: "http://sonarqube.sonarqube.svc.cluster.local:9000"
+
+      # ── Pipeline jobs (created via Job DSL on first startup) ─────────────────
+      jobs: |
+        jobs:
+          - script: |
+              pipelineJob('api-ci') {
+                description('CI pipeline — Node.js API\nStages: checkout → lint → gitleaks → OWASP → SonarQube → docker build → trivy')
+                definition {
+                  cpsScm {
+                    scm {
+                      git {
+                        remote {
+                          url('https://github.com/amitactive2008/DevSecOps-Mega-Project.git')
+                        }
+                        branches('*/main', '*/dev')
+                      }
+                    }
+                    scriptPath('api/Jenkinsfile')
+                    lightweight(true)
+                  }
+                }
+                logRotator {
+                  numToKeep(10)
+                }
+              }
+
+              pipelineJob('client-ci') {
+                description('CI pipeline — React frontend\nStages: checkout → lint → gitleaks → OWASP → SonarQube → docker build → trivy')
+                definition {
+                  cpsScm {
+                    scm {
+                      git {
+                        remote {
+                          url('https://github.com/amitactive2008/DevSecOps-Mega-Project.git')
+                        }
+                        branches('*/main', '*/dev')
+                      }
+                    }
+                    scriptPath('client/Jenkinsfile')
+                    lightweight(true)
+                  }
+                }
+                logRotator {
+                  numToKeep(10)
+                }
+              }
+
+persistence:
+  enabled: true
+  storageClass: "standard"   # kind's default StorageClass
+  size: "10Gi"
+
+serviceAccount:
+  create: true
+  name: "jenkins"
+
+rbac:
+  create: true
+  readSecrets: true
+
+agent:
+  enabled: true
+  namespace: "jenkins"

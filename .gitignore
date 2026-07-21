@@ -20,6 +20,9 @@ jenkins/buildkitd/certs/
 **/*secrets*.yaml
 **/*secrets*.yml
 
+# Jenkins filled-in credentials (copy of credentials-template.yaml with real values)
+jenkins/setup/credentials.yaml
+
 # AWS IAM policy files (ignore real ones)
 kubernetes/k8s-manifests/aws-secret-manager/*.json
 
