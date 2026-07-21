@@ -9,7 +9,7 @@ const SECRET = process.env.JWT_SECRET || 'supersecret'; // ideally from .env
 const query = util.promisify(db.query).bind(db);
 
 exports.register = async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, phone_number } = req.body;
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Missing fields' });
@@ -18,8 +18,8 @@ exports.register = async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await query(
-      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-      [name, email, hashedPassword, role || 'viewer']
+      'INSERT INTO users (name, email, password, role, phone_number) VALUES (?, ?, ?, ?, ?)',
+      [name, email, hashedPassword, role || 'viewer', phone_number || null]
     );
 
     res.status(201).json({ message: 'User registered', id: result.insertId });
@@ -58,7 +58,8 @@ exports.login = async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        phone_number: user.phone_number || null
       }
     });
   } catch (err) {

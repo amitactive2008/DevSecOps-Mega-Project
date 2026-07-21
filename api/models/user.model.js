@@ -35,6 +35,11 @@ module.exports = (sequelize) => {
         defaultValue: 'viewer',
       },
 
+      phone_number: {
+        type: DataTypes.STRING(20),
+        allowNull: true,
+      },
+
       is_active: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
