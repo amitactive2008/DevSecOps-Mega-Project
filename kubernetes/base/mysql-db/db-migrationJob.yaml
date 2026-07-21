@@ -12,7 +12,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: migration
-        image: ayaan49/api:latest
+        image: amitactive2008/api:latest
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000

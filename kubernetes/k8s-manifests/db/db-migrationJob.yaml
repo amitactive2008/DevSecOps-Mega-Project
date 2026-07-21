@@ -14,7 +14,7 @@ spec:
 
       containers:
       - name: migration
-        image: ayaan49/api:latest
+        image: amitactive2008/api:latest
         imagePullPolicy: Always
 
         command: ["node", "scripts/migrate.js"]

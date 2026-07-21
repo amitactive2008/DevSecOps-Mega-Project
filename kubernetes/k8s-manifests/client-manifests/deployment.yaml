@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
       - name: client
-        image: ayaan49/client:latest1
+        image: amitactive2008/client:latest1
         ports:
         - containerPort: 80
 

@@ -8,7 +8,7 @@ spec:
     spec:
       containers:
       - name: migration
-        image: ayaan49/api:latest
+        image: amitactive2008/api:latest
         resources:
           requests: 
             memory: "256Mi"

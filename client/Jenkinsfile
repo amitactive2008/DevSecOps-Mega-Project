@@ -7,7 +7,7 @@ pipeline {
   }
 
   environment {
-    REGISTRY = "ayaan49"
+    REGISTRY = "amitactive2008"
     APP = "client"
     registryCredential = 'dockerhub'
   }
@@ -17,7 +17,7 @@ pipeline {
     stage('Stage 1: Checkout') {
       steps {
         echo "Checking out code..."
-        git branch: 'dev', url: 'https://github.com/Ayaan49/DevSecOps-Mega-Project.git'
+        git branch: 'dev', url: 'https://github.com/amitactive2008/DevSecOps-Mega-Project.git'
       }
     }
 

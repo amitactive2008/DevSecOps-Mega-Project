@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: client
-        image: ayaan49/client:latest2
+        image: amitactive2008/client:latest2
         imagePullPolicy: Always
         ports:
         - containerPort: 80

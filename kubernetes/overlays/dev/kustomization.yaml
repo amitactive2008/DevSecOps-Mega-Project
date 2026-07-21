@@ -8,10 +8,10 @@ resources:
 namespace: dev
 
 images: 
-  - name: ayaan49/api
+  - name: amitactive2008/api
     newTag: latest
 
-  - name: ayaan49/client
+  - name: amitactive2008/client
     newTag: latest1
 
 patches:

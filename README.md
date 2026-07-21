@@ -269,11 +269,11 @@ kubectl create secret generic vault-token \
 ### Step 5 — Pre-load Docker images (bypasses DockerHub TLS issues in kind)
 
 ```bash
-podman pull docker.io/ayaan49/api:latest
-podman pull docker.io/ayaan49/client:latest1
+podman pull docker.io/amitactive2008/api:latest
+podman pull docker.io/amitactive2008/client:latest1
 
-podman save -o /tmp/api.tar    docker.io/ayaan49/api:latest
-podman save -o /tmp/client.tar docker.io/ayaan49/client:latest1
+podman save -o /tmp/api.tar    docker.io/amitactive2008/api:latest
+podman save -o /tmp/client.tar docker.io/amitactive2008/client:latest1
 
 export KIND_EXPERIMENTAL_PROVIDER=podman
 kind load image-archive /tmp/api.tar    --name vault

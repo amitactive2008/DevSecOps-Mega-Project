@@ -32,7 +32,7 @@ spec:
           readOnlyRootFilesystem: true
           runAsNonRoot: true
           runAsUser: 1000
-        image: ayaan49/api:latest
+        image: amitactive2008/api:latest
         imagePullPolicy: Always
         ports:
         - name: http 
