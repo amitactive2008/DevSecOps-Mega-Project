@@ -372,11 +372,12 @@ What `deploy.sh` does, in order:
 | 1 | Check prerequisites (`kubectl`, `helm`, `kind`) |
 | 2 | Apply namespace, RBAC, BuildKit via Kustomize |
 | 3 | Create `jenkins-credentials` secret (interactive if not present) |
-| 4 | Pre-load Jenkins image into Kind node (bypasses TLS issues) |
+| 4 | Pre-load Jenkins image into Kind node (bypasses DockerHub TLS issues in kind) |
 | 5 | Add Helm repos (Jenkins + SonarQube) |
-| 6 | Deploy SonarQube Community via Helm with nginx ingress |
-| 7 | Generate SonarQube analysis token via API → store as `sonarqube-token` K8s Secret |
-| 8 | Deploy Jenkins via Helm with JCasC (clouds, credentials, jobs pre-configured) |
+| 6 | Deploy SonarQube Community via Helm with nginx ingress + TLS |
+| 7 | Generate SonarQube tokens via API (must run before admin password is changed): `GLOBAL_ANALYSIS_TOKEN` for Jenkins scanner auth; `USER_TOKEN` for webhook creation |
+| 8 | Register SonarQube→Jenkins webhook (`/sonarqube-webhook/`) — required for `waitForQualityGate()` |
+| 9 | Deploy Jenkins via Helm with JCasC (clouds, credentials, jobs pre-configured) |
 
 After the script completes:
 
@@ -390,6 +391,16 @@ Jenkins comes pre-configured with:
 - **Credentials** — `dockerhub`, `NVD_API_KEY`, `sonarqube-token`
 - **SonarQube server** `mysonarqube` — authenticated with the auto-generated token
 - **Pipeline jobs** — `api-ci` and `client-ci` pre-created via Job DSL
+
+> **NVD API key** is optional. The `NVD_API_KEY` credential is used by Stage 4 (OWASP Dependency-Check) to call the NVD API with higher rate limits. If the key is absent or set to `placeholder`, the `--nvdApiKey` flag is skipped and dependency-check runs against the public NVD API (rate-limited but functional). Register a free key at https://nvd.nist.gov/developers/request-an-api-key and update the secret:
+> ```bash
+> kubectl patch secret jenkins-credentials -n jenkins --type='json' \
+>   -p='[{"op":"replace","path":"/data/NVD_API_KEY","value":"'$(echo -n YOUR_KEY | base64)'"}]'
+> kubectl rollout restart statefulset/jenkins -n jenkins
+> ```
+
+> **SonarQube webhook** (required for Quality Gate). `deploy.sh` creates it automatically on fresh installs. If re-deploying or if it fails, create it manually:
+> `https://sonarqube.kind.local/admin/webhooks` → **Create** → Name: `jenkins`, URL: `http://jenkins.jenkins.svc.cluster.local:8080/sonarqube-webhook/`
 
 ### Teardown
 
@@ -532,6 +543,49 @@ The production pattern (CSI driver + IRSA) avoids storing secrets as K8s Secrets
 * Observability stack (metrics & logging)
 * Production environment overlay
 * CD pipeline automation (GitOps-driven)
+
+---
+
+## Troubleshooting
+
+### Stage 4 (SCA) — `Invalid API Key` error
+The NVD API key in `jenkins-credentials` is invalid or a placeholder. The Jenkinsfile guards against this: if `NVD_API_KEY` is empty or `placeholder`, `--nvdApiKey` is omitted and the scan proceeds without it.
+```bash
+# Check current value
+kubectl get secret jenkins-credentials -n jenkins \
+  -o jsonpath='{.data.NVD_API_KEY}' | base64 -d && echo
+
+# Set to placeholder to skip the key
+kubectl patch secret jenkins-credentials -n jenkins --type='json' \
+  -p='[{"op":"replace","path":"/data/NVD_API_KEY","value":"'$(echo -n placeholder | base64)'"}]'
+kubectl rollout restart statefulset/jenkins -n jenkins
+```
+
+### Stage 6 (Quality Gate) — times out after 1 minute
+`waitForQualityGate()` requires a SonarQube webhook to call back to Jenkins with the analysis result. Without it, Jenkins polls until timeout.
+```
+https://sonarqube.kind.local/admin/webhooks → Create
+  Name: jenkins
+  URL:  http://jenkins.jenkins.svc.cluster.local:8080/sonarqube-webhook/
+```
+
+### Stage 7 (Docker Build) — `ca.pem: no such file or directory`
+The Makefile `builder` target previously passed TLS `--driver-opt` flags for BuildKit, but `buildkitd` runs without TLS in this setup. This has been fixed — the TLS flags were removed from [Makefile](Makefile).
+
+### Jenkins pod `CrashLoopBackOff` — JCasC conflict
+Occurs when the Helm chart's built-in `jcasc-default-config.yaml` and a custom `configScript` both define the `jenkins.clouds` key. Fixed by removing the `kubernetes-cloud` configScript from `jenkins-values.yaml` and letting the Helm default handle it.
+
+### SonarQube admin API returns 401 with `admin:admin`
+SonarQube 25+ removed basic-auth for admin API endpoints. Use a USER_TOKEN for API calls. `deploy.sh` generates one automatically at install time (before the admin password is changed).
+
+### ESO `SecretSyncedError` — `permission denied` on Vault
+The `vault-token` secret in the `external-secrets` namespace has a stale or incorrect token.
+```bash
+kubectl create secret generic vault-token \
+  --from-literal=token=<vault-root-token> \
+  -n external-secrets --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment external-secrets -n external-secrets
+```
 
 ---
 
