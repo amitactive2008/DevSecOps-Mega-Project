@@ -51,10 +51,15 @@ pipeline {
           dir('api') {
             withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
               sh '''
+                # Use NVD key only if it is set and not a placeholder value
+                NVD_OPTS=""
+                if [ -n "$NVD_KEY" ] && [ "$NVD_KEY" != "placeholder" ]; then
+                  NVD_OPTS="--nvdApiKey $NVD_KEY"
+                fi
                 /usr/share/dependency-check/bin/dependency-check.sh \
                   --scan . \
                   --project backend-nodejs \
-                  --nvdApiKey $NVD_KEY \
+                  $NVD_OPTS \
                   --out reports \
                   --format HTML \
                   --format JSON \
