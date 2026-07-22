@@ -1,6 +1,7 @@
 apiVersion: v1
 kind: Pod
 spec:
+  serviceAccountName: jenkins
   securityContext:
     fsGroup: 1000
 
