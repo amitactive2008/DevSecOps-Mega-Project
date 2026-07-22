@@ -7,18 +7,22 @@ BUILDKIT_HOST = tcp://buildkitd:1234
 .PHONY: builder client api
 
 builder:
-	 docker buildx create \
+	docker buildx create \
 		--name imagebuilder \
 		--driver=remote \
 		$(BUILDKIT_HOST) \
+		--bootstrap --use 2>/dev/null || docker buildx use imagebuilder
 
+client: builder
+	docker buildx build \
+		--platform $(PLATFORM) \
 		-f client/Dockerfile \
 		-t $(REGISTRY)/client:$(VERSION) \
 		client/ \
 		--push
 
 api: builder
-	 docker buildx build \
+	docker buildx build \
 		--platform $(PLATFORM) \
 		-f api/Dockerfile \
 		-t $(REGISTRY)/api:$(VERSION) \
