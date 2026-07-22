@@ -123,7 +123,7 @@ controller:
             buildWrapperEnabled: true
             installations:
               - name: "mysonarqube"
-                serverUrl: "http://sonarqube.sonarqube.svc.cluster.local:9000"
+                serverUrl: "http://sonarqube-sonarqube.sonarqube.svc.cluster.local:9000"
                 credentialsId: "sonarqube-token"
 
       # ── Pipeline jobs (created via Job DSL on first startup) ─────────────────
@@ -151,7 +151,30 @@ controller:
                 }
               }
 
-              pipelineJob('client-ci') {
+              pipelineJob('deploy-to-local') {
+                description('CD pipeline — deploy CI-built image to local Kind cluster')
+                parameters {
+                  stringParam('API_IMAGE_TAG', 'latest', 'API image tag from api-ci build number')
+                  stringParam('CLIENT_IMAGE_TAG', 'latest1', 'Client image tag')
+                }
+                definition {
+                  cpsScm {
+                    scm {
+                      git {
+                        remote {
+                          url('https://github.com/amitactive2008/DevSecOps-Mega-Project.git')
+                        }
+                        branches('*/main')
+                      }
+                    }
+                    scriptPath('jenkins/Jenkinsfile-cd-local')
+                    lightweight(true)
+                  }
+                }
+                logRotator {
+                  numToKeep(20)
+                }
+              }
                 description('CI pipeline — React frontend\nStages: checkout → lint → gitleaks → OWASP → SonarQube → docker build → trivy')
                 definition {
                   cpsScm {

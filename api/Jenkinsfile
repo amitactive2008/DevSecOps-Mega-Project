@@ -122,5 +122,16 @@ pipeline {
       }
     }
 
+    stage('Stage 9: Deploy to local') {
+      steps {
+        echo "Triggering CD pipeline to deploy api:${BUILD_NUMBER} to local Kind cluster..."
+        build job: 'deploy-to-local',
+          parameters: [
+            string(name: 'API_IMAGE_TAG', value: "${BUILD_NUMBER}")
+          ],
+          wait: false
+      }
+    }
+
   } // closes stages
 } // closes pipeline
