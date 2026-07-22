@@ -31,18 +31,19 @@ pipeline {
     stage('Stage 2: Update Image Tags') {
       steps {
         echo "Patching kustomization.yaml with new image tags..."
-        sh '''
-          # Replace API image tag (sed: find 'name: amitactive2008/api', then replace next 'newTag:' line)
-          sed -i '/name: amitactive2008\/api/{n; s/newTag: .*/newTag: "'"${API_IMAGE_TAG}"'"/}' \
+        // Use triple-double-quotes so Groovy interpolates ${params.*} directly.
+        // \\\\ → \\  (Groovy) → \  (shell)  e.g. \\/ → \/  for sed
+        // \\"  → \"  (Groovy) → "  (shell)  e.g. \\"13\\" → "13" in sed replacement
+        sh """
+          sed -i '/name: amitactive2008\\/api/{n; s/newTag: .*/newTag: \\"${params.API_IMAGE_TAG}\\"/}' \\
             kubernetes/overlays/local/kustomization.yaml
 
-          # Replace Client image tag
-          sed -i '/name: amitactive2008\/client/{n; s/newTag: .*/newTag: "'"${CLIENT_IMAGE_TAG}"'"/}' \
+          sed -i '/name: amitactive2008\\/client/{n; s/newTag: .*/newTag: \\"${params.CLIENT_IMAGE_TAG}\\"/}' \\
             kubernetes/overlays/local/kustomization.yaml
 
-          echo "=== Updated image tags ==="
-          grep -A1 "name: amitactive2008" kubernetes/overlays/local/kustomization.yaml | grep -v "^--$"
-        '''
+          echo '=== Updated image tags ==='
+          grep -A1 'name: amitactive2008' kubernetes/overlays/local/kustomization.yaml | grep -v '^--\$'
+        """
       }
     }
 
