@@ -113,14 +113,17 @@ A three-tier web application (React → Node.js → MySQL) deployed on Kubernete
 │   └── infra/                  # Cluster-level prereqs (cert-manager issuers, ESO stores)
 │
 └── jenkins/
-    ├── Jenkins-agent.yaml      # Agent pod template (nodejs, sonar, trivy, etc.)
+    ├── Jenkins-agent.yaml      # CI agent pod template (nodejs, sonar, trivy, buildkitd, etc.)
+    ├── Jenkins-agent-cd.yaml   # CD agent pod template (kubectl only, no PVC dependency)
+    ├── Jenkinsfile-cd-local    # CD pipeline: deploy CI-built image to local Kind cluster
     └── setup/                  # One-shot deployment for local CI/CD stack
         ├── deploy.sh           # Idempotent script: deploys SonarQube + Jenkins
         ├── jenkins-values.yaml # Jenkins Helm values (JCasC, plugins, ingress)
         ├── sonarqube-values.yaml # SonarQube Community Helm values (ingress, TLS)
-        ├── kustomization.yaml  # RBAC, buildkitd, certs stub
-        ├── rbac.yaml           # ClusterRole for Jenkins agent pods
+        ├── kustomization.yaml  # RBAC, buildkitd, certs stub, NVD PVC
+        ├── rbac.yaml           # ClusterRole for Jenkins agent pods + local namespace deploy
         ├── buildkitd.yaml      # BuildKit daemon for rootless image builds
+        ├── dependency-check-pvc.yaml  # 5Gi PVC — persists NVD database between builds
         └── credentials-template.yaml  # Template for jenkins-credentials Secret
 ```
 
@@ -459,26 +462,46 @@ argocd app create devsecops-dev \
 
 ## CI/CD Pipeline
 
-Each of `api/` and `client/` has its own `Jenkinsfile`. The pipeline stages are:
+### CI Pipeline (`api/Jenkinsfile` and `client/Jenkinsfile`)
+
+Each component has its own CI Jenkinsfile. The pipeline stages are:
 
 ```
 git push
     │
     ▼
-Stage 1: Checkout          — pull source from Git
+Stage 1: Checkout          — pull source from Git (dev branch)
 Stage 2: Compilation       — syntax check all .js files
 Stage 3: Gitleaks          — scan for leaked secrets
-Stage 4: SCA               — OWASP Dependency-Check (CVE audit)
+Stage 4: SCA               — OWASP Dependency-Check (CVE audit, cached NVD DB via PVC)
 Stage 5: SAST              — SonarQube static analysis
 Stage 6: Quality Gate      — fail build if SonarQube gate fails
-Stage 7: Docker Build      — build image, tag with Jenkins build number
-Stage 8: Trivy Scan        — scan image for OS/library CVEs
-Stage 9: Push to Registry  — push to DockerHub
-Stage 10: Update Manifests — update image tag in overlays/dev/kustomization.yaml
+Stage 7: Docker Build      — buildx multi-arch build via BuildKit, push to DockerHub
+Stage 8: Trivy Scan        — scan pushed image for OS/library CVEs
+Stage 9: Deploy            — trigger deploy-to-local with BUILD_NUMBER (wait: false)
+```
+
+> **Stage 4 optimisation**: the NVD vulnerability database (369k records) is stored in a
+> 5Gi PVC (`dependency-check-data`). First build downloads the full DB (~20 min);
+> every subsequent build only syncs the delta (~30 seconds).
+
+### CD Pipeline (`jenkins/Jenkinsfile-cd-local`)
+
+Triggered automatically by Stage 9 of `api-ci`, or run manually with a build number parameter.
+
+```
+deploy-to-local(API_IMAGE_TAG=<build_number>)
     │
     ▼
-Argo CD detects Git change → syncs cluster → rolling deploy
+Stage 1: Checkout           — pull latest manifests from main branch
+Stage 2: Update Image Tags  — sed-patch kustomization.yaml with new tag
+Stage 3: Deploy             — kubectl delete old migration job
+                              kubectl apply -k kubernetes/overlays/local
+Stage 4: Verify Rollout     — rollout status + API /health + /live check
 ```
+
+The CD agent uses a minimal pod spec (`jenkins/Jenkins-agent-cd.yaml` — kubectl only) so
+it is not blocked by the `ReadWriteOnce` NVD PVC and can schedule on any cluster node.
 
 Jenkins agents run as **ephemeral Kubernetes pods** (defined in `jenkins/Jenkins-agent.yaml`), each container providing a specific tool:
 
@@ -494,13 +517,25 @@ Jenkins agents run as **ephemeral Kubernetes pods** (defined in `jenkins/Jenkins
 
 BuildKit runs as a separate `Deployment` (`buildkitd`) in the `jenkins` namespace, providing rootless image builds without a Docker daemon on the node.
 
+### End-to-End Flow (local Kind cluster)
+
+```
+git push (dev branch)
+    ↓
+api-ci (Stage 1-8)  →  amitactive2008/api:<BUILD_NUMBER> pushed to DockerHub
+    ↓ Stage 9 (wait: false)
+deploy-to-local (Stage 1-4)  →  kustomization.yaml patched
+                                  kubectl apply -k overlays/local
+                                  Pods rolling update in local namespace
+```
+
 ### SonarQube Quality Gate
 
 Stage 6 (`waitForQualityGate`) polls SonarQube until the analysis result is returned. The Quality Gate passes if no new bugs, vulnerabilities, or code smells exceed the configured thresholds. A failing gate blocks the Docker build stage.
 
 The SonarQube server is pre-configured in Jenkins via JCasC:
 - **Server name**: `mysonarqube`
-- **URL**: `http://sonarqube.sonarqube.svc.cluster.local:9000` (in-cluster)
+- **URL**: `http://sonarqube-sonarqube.sonarqube.svc.cluster.local:9000` (in-cluster)
 - **Token**: auto-generated by `deploy.sh`, stored as K8s Secret `sonarqube-token` in the `jenkins` namespace
 
 ---
