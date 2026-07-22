@@ -175,6 +175,8 @@ controller:
                   numToKeep(20)
                 }
               }
+
+              pipelineJob('client-ci') {
                 description('CI pipeline — React frontend\nStages: checkout → lint → gitleaks → OWASP → SonarQube → docker build → trivy')
                 definition {
                   cpsScm {
