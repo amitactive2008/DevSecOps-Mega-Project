@@ -100,11 +100,11 @@ helm upgrade --install sonarqube sonarqube/sonarqube \
   --timeout 5m
 success "SonarQube deployed"
 
-# ── 6. Generate SonarQube token and store as K8s Secret ───────────────────────
+# ── 6. Generate SonarQube tokens and configure webhook ───────────────────────
 info "Setting up SonarQube token for Jenkins..."
 
 if kubectl get secret sonarqube-token -n "$NAMESPACE" &>/dev/null; then
-  success "sonarqube-token secret already exists — skipping"
+  success "sonarqube-token secret already exists — skipping token generation"
 else
   # Port-forward SonarQube to a local port temporarily
   LOCAL_SQ_PORT=19000
@@ -113,7 +113,7 @@ else
   PF_PID=$!
   trap 'kill $PF_PID 2>/dev/null' EXIT
 
-  # Wait for SonarQube API to be UP
+  # Wait for SonarQube API to be UP (admin:admin works at install before first login)
   info "Waiting for SonarQube API..."
   for i in $(seq 1 18); do
     SQ_STATUS=$(curl -sf "http://localhost:${LOCAL_SQ_PORT}/api/system/status" \
@@ -123,30 +123,63 @@ else
   done
 
   if [ "$SQ_STATUS" != "UP" ]; then
-    warn "SonarQube API did not become UP in time. Create the token manually:"
-    warn "  1. Open http://localhost:${LOCAL_SQ_PORT} (or kubectl port-forward)"
-    warn "  2. Log in (admin/admin), go to My Account → Security → Generate Token"
-    warn "  3. kubectl create secret generic sonarqube-token --from-literal=token=<token> -n $NAMESPACE"
-    kill $PF_PID 2>/dev/null
+    warn "SonarQube API did not become UP in time — create tokens manually."
   else
-    # Generate a global analysis token named 'jenkins'
-    SQ_TOKEN=$(curl -sf -u admin:admin \
+    # Step A: Generate a USER_TOKEN for admin (has full API access including webhooks).
+    # NOTE: SonarQube 25+ requires token auth for admin APIs; basic auth password
+    # still works for token generation right after install (before password change).
+    ADMIN_TOKEN=$(curl -s -u admin:admin \
       -X POST "http://localhost:${LOCAL_SQ_PORT}/api/user_tokens/generate" \
-      -d "name=jenkins&type=GLOBAL_ANALYSIS_TOKEN" \
-      2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null || echo "")
+      -d "name=deploy-admin&type=USER_TOKEN" \
+      2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token',''))" 2>/dev/null || echo "")
+
+    # Step B: Generate a GLOBAL_ANALYSIS_TOKEN for Jenkins scanner
+    SQ_TOKEN=$(curl -s -u admin:admin \
+      -X POST "http://localhost:${LOCAL_SQ_PORT}/api/user_tokens/generate" \
+      -d "name=jenkins-scanner&type=GLOBAL_ANALYSIS_TOKEN" \
+      2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token',''))" 2>/dev/null || echo "")
 
     kill $PF_PID 2>/dev/null
     trap - EXIT
 
-    if [ -z "$SQ_TOKEN" ]; then
-      warn "Token generation failed (token 'jenkins' may already exist)."
-      warn "If re-running deploy.sh: the existing token is already in the secret."
-    else
+    if [ -n "$SQ_TOKEN" ]; then
       kubectl create secret generic sonarqube-token \
         --from-literal=token="$SQ_TOKEN" \
         -n "$NAMESPACE" \
         --dry-run=client -o yaml | kubectl apply -f -
-      success "sonarqube-token secret created in namespace $NAMESPACE"
+      success "sonarqube-token (GLOBAL_ANALYSIS_TOKEN) created in namespace $NAMESPACE"
+    else
+      warn "Analysis token generation failed — create manually in SonarQube UI"
+      warn "  My Account → Security → Generate Token (GLOBAL_ANALYSIS_TOKEN)"
+      warn "  kubectl create secret generic sonarqube-token --from-literal=token=<token> -n $NAMESPACE"
+    fi
+
+    # Step C: Use admin USER_TOKEN to create the Jenkins webhook
+    if [ -n "$ADMIN_TOKEN" ]; then
+      LOCAL_SQ_PORT2=19001
+      kubectl port-forward svc/sonarqube-sonarqube -n sonarqube \
+        "${LOCAL_SQ_PORT2}:9000" &>/dev/null &
+      PF2=$!
+      sleep 3
+      WH_RESULT=$(curl -s -w "%{http_code}" -o /dev/null \
+        -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+        -X POST "http://localhost:${LOCAL_SQ_PORT2}/api/webhooks/create" \
+        -d "name=jenkins&url=http://jenkins.jenkins.svc.cluster.local:8080/sonarqube-webhook/" 2>/dev/null)
+      kill $PF2 2>/dev/null
+      if [ "$WH_RESULT" = "200" ]; then
+        success "SonarQube webhook configured → Jenkins"
+      else
+        warn "Webhook creation returned HTTP $WH_RESULT — create it manually:"
+        warn "  https://sonarqube.kind.local/admin/webhooks → Create"
+        warn "  Name: jenkins"
+        warn "  URL:  http://jenkins.jenkins.svc.cluster.local:8080/sonarqube-webhook/"
+      fi
+    else
+      warn "Could not create webhook automatically (admin token unavailable)"
+      warn "Create it manually in SonarQube UI:"
+      warn "  https://sonarqube.kind.local/admin/webhooks → Create"
+      warn "  Name: jenkins"
+      warn "  URL:  http://jenkins.jenkins.svc.cluster.local:8080/sonarqube-webhook/"
     fi
   fi
 fi

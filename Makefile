@@ -11,12 +11,7 @@ builder:
 		--name imagebuilder \
 		--driver=remote \
 		$(BUILDKIT_HOST) \
-		--driver-opt=cacert=/certs/ca.pem,cert=/certs/cert.pem,key=/certs/key.pem \
-		--bootstrap --use || true
 
-client: builder
-	 docker buildx build \
-		--platform $(PLATFORM) \
 		-f client/Dockerfile \
 		-t $(REGISTRY)/client:$(VERSION) \
 		client/ \
