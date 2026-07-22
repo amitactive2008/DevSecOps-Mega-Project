@@ -1,0 +1,49 @@
+# SonarQube Community Helm chart values for local Kind cluster.
+# Chart: https://SonarSource.github.io/helm-chart-sonarqube
+# Docs:  https://github.com/SonarSource/helm-chart-sonarqube
+#
+# Deploy:  helm upgrade --install sonarqube sonarqube/sonarqube \
+#            --namespace sonarqube --create-namespace \
+#            --values jenkins/setup/sonarqube-values.yaml
+
+community:
+  enabled: true
+
+monitoringPasscode: "localpasscode123"
+
+# Default credentials: admin / admin (forced password change on first login)
+# For automated token generation in deploy.sh, the initial password must be
+# known — override it here so deploy.sh can call the API without manual input.
+account:
+  adminPassword: "admin"
+  currentAdminPassword: "admin"
+
+persistence:
+  enabled: false   # local dev — no need for persistent storage
+
+resources:
+  requests:
+    cpu: "200m"
+    memory: "1Gi"
+  limits:
+    cpu: "2"
+    memory: "2Gi"
+
+service:
+  type: ClusterIP
+
+# ── Ingress: https://sonarqube.kind.local ────────────────────────────────────
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  hosts:
+    - name: sonarqube.kind.local
+      path: /
+      pathType: Prefix
+  annotations:
+    cert-manager.io/cluster-issuer: "selfsigned-issuer"
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+  tls:
+    - secretName: sonarqube-tls-local
+      hosts:
+        - sonarqube.kind.local

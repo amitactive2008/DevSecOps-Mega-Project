@@ -14,8 +14,11 @@ controller:
     tag: "2.504.1-lts"
     pullPolicy: "IfNotPresent"
 
-  adminUser: "admin"
-  adminPassword: "admin"   # Change this after first login
+  admin:
+    username: "admin"
+    password: "admin"   # Change this after first login
+
+  numExecutors: 0
 
   resources:
     requests:
@@ -29,7 +32,7 @@ controller:
 
   # Read credentials from the jenkins-credentials K8s Secret (created by deploy.sh)
   # JCasC then references these via ${ENV_VAR} substitution.
-  extraEnvVars:
+  containerEnv:
     - name: DOCKERHUB_USERNAME
       valueFrom:
         secretKeyRef:
@@ -45,6 +48,12 @@ controller:
         secretKeyRef:
           name: jenkins-credentials
           key: NVD_API_KEY
+    - name: SONARQUBE_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: sonarqube-token
+          key: token
+          optional: true   # pod still starts if SonarQube isn't deployed yet
 
   installPlugins:
     - kubernetes:latest
@@ -78,30 +87,11 @@ controller:
           - jenkins.kind.local
 
   # Jenkins Configuration as Code (JCasC)
-  # Applied automatically on startup — no manual UI configuration needed.
+  # NOTE: defaultConfig: true (default) — the Helm chart generates jcasc-default-config.yaml
+  # which already configures jenkins.clouds (Kubernetes), authorizationStrategy, securityRealm.
+  # We only add scripts for things NOT in that default file.
   JCasC:
     configScripts:
-
-      # ── Kubernetes cloud: dynamic agent pods ─────────────────────────────────
-      kubernetes-cloud: |
-        jenkins:
-          systemMessage: "Jenkins | DevSecOps-Mega-Project | Local Kind Cluster"
-          numExecutors: 0
-
-          clouds:
-            - kubernetes:
-                name: "kubernetes"
-                serverUrl: ""
-                skipTlsVerify: false
-                namespace: "jenkins"
-                jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8080"
-                jenkinsTunnel: "jenkins-agent.jenkins.svc.cluster.local:50000"
-                connectTimeout: 5
-                readTimeout: 15
-                containerCapStr: "10"
-                podRetention: "never"
-                # Pod templates are defined per-pipeline via yamlFile in each Jenkinsfile.
-                # See jenkins/Jenkins-agent.yaml for the agent spec.
 
       # ── Credentials: DockerHub + NVD API key ─────────────────────────────────
       credentials: |
@@ -120,6 +110,11 @@ controller:
                       description: "NVD API Key for OWASP Dependency-Check"
                       secret: "${NVD_API_KEY}"
                       scope: GLOBAL
+                  - string:
+                      id: "sonarqube-token"
+                      description: "SonarQube global analysis token"
+                      secret: "${SONARQUBE_TOKEN}"
+                      scope: GLOBAL
 
       # ── SonarQube server (optional — deploy SonarQube separately to enable) ───
       sonarqube: |
@@ -129,6 +124,7 @@ controller:
             installations:
               - name: "mysonarqube"
                 serverUrl: "http://sonarqube.sonarqube.svc.cluster.local:9000"
+                credentialsId: "sonarqube-token"
 
       # ── Pipeline jobs (created via Job DSL on first startup) ─────────────────
       jobs: |

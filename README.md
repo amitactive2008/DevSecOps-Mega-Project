@@ -59,6 +59,9 @@ A three-tier web application (React → Node.js → MySQL) deployed on Kubernete
 | **External Secrets Operator** | `external-secrets` | Pulls secrets from Vault/AWS SM → creates K8s Secrets |
 | **HashiCorp Vault** | `vault` | Secret store for DB credentials and JWT secret (local) |
 | **Migration Job** | `local` / `dev` | Runs `sequelize db:migrate` once per deploy, then exits |
+| **Jenkins** | `jenkins` | CI server with pod-based agents; deployed via `jenkins/setup/deploy.sh` |
+| **SonarQube** | `sonarqube` | SAST server; deployed alongside Jenkins by `deploy.sh` |
+| **BuildKit** | `jenkins` | Rootless image builder used by Jenkins docker-cli agent container |
 
 ### CI/CD Tools
 
@@ -109,7 +112,16 @@ A three-tier web application (React → Node.js → MySQL) deployed on Kubernete
 │   │
 │   └── infra/                  # Cluster-level prereqs (cert-manager issuers, ESO stores)
 │
-└── jenkins/                    # Jenkins agent pod spec
+└── jenkins/
+    ├── Jenkins-agent.yaml      # Agent pod template (nodejs, sonar, trivy, etc.)
+    └── setup/                  # One-shot deployment for local CI/CD stack
+        ├── deploy.sh           # Idempotent script: deploys SonarQube + Jenkins
+        ├── jenkins-values.yaml # Jenkins Helm values (JCasC, plugins, ingress)
+        ├── sonarqube-values.yaml # SonarQube Community Helm values (ingress, TLS)
+        ├── kustomization.yaml  # RBAC, buildkitd, certs stub
+        ├── rbac.yaml           # ClusterRole for Jenkins agent pods
+        ├── buildkitd.yaml      # BuildKit daemon for rootless image builds
+        └── credentials-template.yaml  # Template for jenkins-credentials Secret
 ```
 
 ---
@@ -283,7 +295,9 @@ kind load image-archive /tmp/client.tar --name vault
 ### Step 6 — Configure /etc/hosts
 
 ```bash
-echo "127.0.0.1 app.local" | sudo tee -a /etc/hosts
+echo "127.0.0.1 app.local"              | sudo tee -a /etc/hosts
+echo "127.0.0.1 jenkins.kind.local"     | sudo tee -a /etc/hosts
+echo "127.0.0.1 sonarqube.kind.local"   | sudo tee -a /etc/hosts
 ```
 
 ### Step 7 — Deploy
@@ -337,10 +351,52 @@ Open **https://app.local** in your browser (accept the self-signed cert warning)
 
 Default seeded credentials: `admin@example.com` / `admin123`
 
+### Step 9 — Deploy Jenkins + SonarQube
+
+A single script deploys both tools, wires the SonarQube token into Jenkins credentials, and configures everything via JCasC — no manual UI clicks required.
+
+```bash
+# Create the credentials secret first (DockerHub + NVD API key)
+cp jenkins/setup/credentials-template.yaml jenkins/setup/credentials.yaml
+# Edit credentials.yaml and fill in real values, then:
+kubectl apply -f jenkins/setup/credentials.yaml
+
+# Deploy SonarQube + Jenkins
+./jenkins/setup/deploy.sh
+```
+
+What `deploy.sh` does, in order:
+
+| Step | Action |
+|---|---|
+| 1 | Check prerequisites (`kubectl`, `helm`, `kind`) |
+| 2 | Apply namespace, RBAC, BuildKit via Kustomize |
+| 3 | Create `jenkins-credentials` secret (interactive if not present) |
+| 4 | Pre-load Jenkins image into Kind node (bypasses TLS issues) |
+| 5 | Add Helm repos (Jenkins + SonarQube) |
+| 6 | Deploy SonarQube Community via Helm with nginx ingress |
+| 7 | Generate SonarQube analysis token via API → store as `sonarqube-token` K8s Secret |
+| 8 | Deploy Jenkins via Helm with JCasC (clouds, credentials, jobs pre-configured) |
+
+After the script completes:
+
+| Service | URL | Credentials |
+|---|---|---|
+| Jenkins | `https://jenkins.kind.local` | `admin` / `admin` |
+| SonarQube | `https://sonarqube.kind.local` | `admin` / `admin` (change on first login) |
+
+Jenkins comes pre-configured with:
+- **Kubernetes cloud** — dynamic agent pods (defined in `jenkins/Jenkins-agent.yaml`)
+- **Credentials** — `dockerhub`, `NVD_API_KEY`, `sonarqube-token`
+- **SonarQube server** `mysonarqube` — authenticated with the auto-generated token
+- **Pipeline jobs** — `api-ci` and `client-ci` pre-created via Job DSL
+
 ### Teardown
 
 ```bash
 kubectl delete -k kubernetes/overlays/local
+helm uninstall jenkins   -n jenkins
+helm uninstall sonarqube -n sonarqube
 kind delete cluster --name vault
 ```
 
@@ -413,7 +469,28 @@ Stage 10: Update Manifests — update image tag in overlays/dev/kustomization.ya
 Argo CD detects Git change → syncs cluster → rolling deploy
 ```
 
-Jenkins agents run as **ephemeral Kubernetes pods** (defined in `jenkins/Jenkins-agent.yaml`), each container providing a specific tool: `nodejs`, `gitleaks`, `dependency-check`, `sonar`, `docker-cli`, `trivy`.
+Jenkins agents run as **ephemeral Kubernetes pods** (defined in `jenkins/Jenkins-agent.yaml`), each container providing a specific tool:
+
+| Container | Image | Purpose |
+|---|---|---|
+| `jnlp` | `jenkins/inbound-agent` | JNLP agent — connects back to Jenkins controller |
+| `nodejs` | `node:22-alpine` | JavaScript syntax check |
+| `gitleaks` | `zricethezav/gitleaks` | Secret scanning |
+| `dependency-check` | `owasp/dependency-check` | SCA — CVE audit of npm dependencies |
+| `sonar` | `sonarsource/sonar-scanner-cli` | SAST — sends results to SonarQube |
+| `docker-cli` | `docker:cli` | Builds and pushes Docker images via BuildKit |
+| `trivy` | `aquasec/trivy` | Container image vulnerability scan |
+
+BuildKit runs as a separate `Deployment` (`buildkitd`) in the `jenkins` namespace, providing rootless image builds without a Docker daemon on the node.
+
+### SonarQube Quality Gate
+
+Stage 6 (`waitForQualityGate`) polls SonarQube until the analysis result is returned. The Quality Gate passes if no new bugs, vulnerabilities, or code smells exceed the configured thresholds. A failing gate blocks the Docker build stage.
+
+The SonarQube server is pre-configured in Jenkins via JCasC:
+- **Server name**: `mysonarqube`
+- **URL**: `http://sonarqube.sonarqube.svc.cluster.local:9000` (in-cluster)
+- **Token**: auto-generated by `deploy.sh`, stored as K8s Secret `sonarqube-token` in the `jenkins` namespace
 
 ---
 
@@ -442,6 +519,8 @@ The production pattern (CSI driver + IRSA) avoids storing secrets as K8s Secrets
 | TLS | Self-signed (cert-manager) | Let's Encrypt (cert-manager) |
 | Domain | `app.local` via /etc/hosts | Real domain via Cloudflare DNS |
 | Replicas | 1 | 2 |
+| CI server | Jenkins at `https://jenkins.kind.local` | Jenkins on cluster |
+| SAST server | SonarQube at `https://sonarqube.kind.local` | SonarQube on cluster |
 | GitOps | Manual apply | Argo CD |
 * Argo CD-based GitOps workflow
 * TLS with cert-manager

@@ -83,13 +83,88 @@ else
   warn "Podman not available — Kind node will pull Jenkins image directly from DockerHub"
 fi
 
-# ── 4. Add Helm repo ──────────────────────────────────────────────────────────
-info "Adding Jenkins Helm repo..."
-helm repo add jenkins https://charts.jenkins.io 2>/dev/null || true
-helm repo update jenkins
-success "Helm repo ready"
+# ── 4. Add Helm repos ─────────────────────────────────────────────────────────
+info "Adding Helm repos..."
+helm repo add jenkins   https://charts.jenkins.io 2>/dev/null || true
+helm repo add sonarqube https://SonarSource.github.io/helm-chart-sonarqube 2>/dev/null || true
+helm repo update jenkins sonarqube
+success "Helm repos ready"
 
-# ── 5. Deploy Jenkins ─────────────────────────────────────────────────────────
+# ── 5. Deploy SonarQube ───────────────────────────────────────────────────────
+info "Deploying SonarQube (Community edition)..."
+kubectl create namespace sonarqube 2>/dev/null || true
+helm upgrade --install sonarqube sonarqube/sonarqube \
+  --namespace sonarqube \
+  --values "$REPO_ROOT/jenkins/setup/sonarqube-values.yaml" \
+  --wait \
+  --timeout 5m
+success "SonarQube deployed"
+
+# ── 6. Generate SonarQube token and store as K8s Secret ───────────────────────
+info "Setting up SonarQube token for Jenkins..."
+
+if kubectl get secret sonarqube-token -n "$NAMESPACE" &>/dev/null; then
+  success "sonarqube-token secret already exists — skipping"
+else
+  # Port-forward SonarQube to a local port temporarily
+  LOCAL_SQ_PORT=19000
+  kubectl port-forward svc/sonarqube-sonarqube -n sonarqube \
+    "${LOCAL_SQ_PORT}:9000" &>/dev/null &
+  PF_PID=$!
+  trap 'kill $PF_PID 2>/dev/null' EXIT
+
+  # Wait for SonarQube API to be UP
+  info "Waiting for SonarQube API..."
+  for i in $(seq 1 18); do
+    SQ_STATUS=$(curl -sf "http://localhost:${LOCAL_SQ_PORT}/api/system/status" \
+      2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
+    [ "$SQ_STATUS" = "UP" ] && break
+    sleep 10
+  done
+
+  if [ "$SQ_STATUS" != "UP" ]; then
+    warn "SonarQube API did not become UP in time. Create the token manually:"
+    warn "  1. Open http://localhost:${LOCAL_SQ_PORT} (or kubectl port-forward)"
+    warn "  2. Log in (admin/admin), go to My Account → Security → Generate Token"
+    warn "  3. kubectl create secret generic sonarqube-token --from-literal=token=<token> -n $NAMESPACE"
+    kill $PF_PID 2>/dev/null
+  else
+    # Generate a global analysis token named 'jenkins'
+    SQ_TOKEN=$(curl -sf -u admin:admin \
+      -X POST "http://localhost:${LOCAL_SQ_PORT}/api/user_tokens/generate" \
+      -d "name=jenkins&type=GLOBAL_ANALYSIS_TOKEN" \
+      2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null || echo "")
+
+    kill $PF_PID 2>/dev/null
+    trap - EXIT
+
+    if [ -z "$SQ_TOKEN" ]; then
+      warn "Token generation failed (token 'jenkins' may already exist)."
+      warn "If re-running deploy.sh: the existing token is already in the secret."
+    else
+      kubectl create secret generic sonarqube-token \
+        --from-literal=token="$SQ_TOKEN" \
+        -n "$NAMESPACE" \
+        --dry-run=client -o yaml | kubectl apply -f -
+      success "sonarqube-token secret created in namespace $NAMESPACE"
+    fi
+  fi
+fi
+
+# ── 7. Add sonarqube.kind.local to /etc/hosts (if missing) ───────────────────
+if ! grep -q "sonarqube.kind.local" /etc/hosts 2>/dev/null; then
+  warn "Add this line to /etc/hosts to access SonarQube UI:"
+  warn "  127.0.0.1 sonarqube.kind.local"
+  echo ""
+  if [[ $EUID -eq 0 ]]; then
+    echo "127.0.0.1 sonarqube.kind.local" >> /etc/hosts
+    success "Added sonarqube.kind.local to /etc/hosts"
+  else
+    echo "  Run: echo '127.0.0.1 sonarqube.kind.local' | sudo tee -a /etc/hosts"
+  fi
+fi
+
+# ── 8. Deploy Jenkins ─────────────────────────────────────────────────────────
 info "Deploying Jenkins via Helm (this takes 3-5 minutes)..."
 helm upgrade --install "$HELM_RELEASE" jenkins/jenkins \
   --namespace "$NAMESPACE" \
