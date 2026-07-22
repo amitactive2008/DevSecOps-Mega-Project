@@ -33,11 +33,11 @@ pipeline {
         echo "Patching kustomization.yaml with new image tags..."
         sh '''
           # Replace API image tag (sed: find 'name: amitactive2008/api', then replace next 'newTag:' line)
-          sed -i '/name: amitactive2008\\/api/{n; s/newTag: .*/newTag: '"${API_IMAGE_TAG}"'/}' \
+          sed -i '/name: amitactive2008\/api/{n; s/newTag: .*/newTag: "'"${API_IMAGE_TAG}"'"/}' \
             kubernetes/overlays/local/kustomization.yaml
 
           # Replace Client image tag
-          sed -i '/name: amitactive2008\\/client/{n; s/newTag: .*/newTag: '"${CLIENT_IMAGE_TAG}"'/}' \
+          sed -i '/name: amitactive2008\/client/{n; s/newTag: .*/newTag: "'"${CLIENT_IMAGE_TAG}"'"/}' \
             kubernetes/overlays/local/kustomization.yaml
 
           echo "=== Updated image tags ==="
