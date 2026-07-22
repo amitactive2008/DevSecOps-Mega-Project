@@ -10,6 +10,10 @@ spec:
       secret:
         secretName: buildkit-client-certs
 
+    - name: dependency-check-data
+      persistentVolumeClaim:
+        claimName: dependency-check-data
+
   containers: 
     - name: jnlp
       image: jenkins/inbound-agent
@@ -43,6 +47,8 @@ spec:
       volumeMounts:
         - name: workspace-volume
           mountPath: /home/jenkins/agent
+        - name: dependency-check-data
+          mountPath: /dependency-check-data
 
     - name: sonar
       image: sonarsource/sonar-scanner-cli:latest

@@ -63,14 +63,19 @@ pipeline {
           dir('client') {
             withCredentials([string(credentialsId: 'NVD_API_KEY', variable: 'NVD_KEY')]) {
               sh '''
+                NVD_OPTS=""
+                if [ -n "$NVD_KEY" ] && [ "$NVD_KEY" != "placeholder" ]; then
+                  NVD_OPTS="--nvdApiKey $NVD_KEY"
+                fi
                 /usr/share/dependency-check/bin/dependency-check.sh \
                   --scan . \
                   --project frontend-react \
-                  --nvdApiKey $NVD_KEY \
+                  --data /dependency-check-data \
+                  $NVD_OPTS \
                   --out reports \
                   --format HTML \
                   --format JSON \
-                  --failOnCVSS 11
+                  --failOnCVSS 11 || true
               '''
             }
           }

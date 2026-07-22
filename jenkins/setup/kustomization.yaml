@@ -8,3 +8,4 @@ resources:
   - rbac.yaml
   - buildkitd.yaml
   - buildkit-certs-stub.yaml
+  - dependency-check-pvc.yaml
