@@ -1,7 +1,7 @@
 pipeline {
   agent {
     kubernetes {
-      yamlFile 'jenkins/Jenkins-agent.yaml'
+      yamlFile 'jenkins/Jenkins-agent-cd.yaml'
       defaultContainer 'kubectl'
     }
   }
